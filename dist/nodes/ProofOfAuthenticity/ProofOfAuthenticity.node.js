@@ -45,6 +45,35 @@ const REQUEST_TIMEOUT = 30000; // 30 seconds for API requests
 const DOWNLOAD_TIMEOUT = 120000; // 2 minutes for file downloads
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB maximum file size
 /**
+ * Validates URL to prevent SSRF attacks
+ * Only allows http/https protocols and blocks private IPs
+ */
+function validateUrl(url) {
+    const parsed = new URL(url);
+    // Only allow http/https
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+        throw new Error(`Invalid URL protocol: ${parsed.protocol}. Only http/https allowed.`);
+    }
+    // Block private IPs and localhost (except for development)
+    const hostname = parsed.hostname.toLowerCase();
+    const privatePatterns = [
+        /^10\./,
+        /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
+        /^192\.168\./,
+        /^127\./,
+        /^0\./,
+        /^169\.254\./,
+    ];
+    for (const pattern of privatePatterns) {
+        if (pattern.test(hostname)) {
+            throw new Error(`URL points to private IP range: ${hostname}`);
+        }
+    }
+    if (hostname === 'localhost' || hostname.endsWith('.local')) {
+        throw new Error(`URL points to local hostname: ${hostname}`);
+    }
+}
+/**
  * Creates axios config with HTTPS agent for self-signed certificates in local development
  */
 function getAxiosConfig(baseUrl) {
@@ -304,6 +333,8 @@ class ProofOfAuthenticity {
                     let fileData;
                     if (inputType === 'url') {
                         const fileUrl = this.getNodeParameter('fileUrl', i);
+                        // Validate URL to prevent SSRF
+                        validateUrl(fileUrl);
                         const fileResponse = await axios_1.default.get(fileUrl, {
                             timeout: DOWNLOAD_TIMEOUT,
                             responseType: 'arraybuffer',
