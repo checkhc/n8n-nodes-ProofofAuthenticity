@@ -40,6 +40,7 @@ exports.ProofOfAuthenticity = void 0;
 const n8n_workflow_1 = require("n8n-workflow");
 const axios_1 = __importDefault(require("axios"));
 const https = __importStar(require("https"));
+const crypto = __importStar(require("crypto"));
 // Security and Performance Constants
 const REQUEST_TIMEOUT = 30000; // 30 seconds for API requests
 const DOWNLOAD_TIMEOUT = 120000; // 2 minutes for file downloads
@@ -74,6 +75,31 @@ function validateUrl(url) {
     }
 }
 /**
+ * Calculates SHA-256 hash from file data (base64 or data URI)
+ */
+function calculateSHA256(fileData) {
+    let base64Data;
+    let mimeType = 'application/octet-stream';
+    // Handle data URI format: data:image/jpeg;base64,xxx
+    if (fileData.startsWith('data:')) {
+        const matches = fileData.match(/^data:([^;]+);base64,(.+)$/);
+        if (matches) {
+            mimeType = matches[1];
+            base64Data = matches[2];
+        }
+        else {
+            const parts = fileData.split(',');
+            base64Data = parts[1] || parts[0];
+        }
+    }
+    else {
+        base64Data = fileData;
+    }
+    const fileBuffer = Buffer.from(base64Data, 'base64');
+    const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+    return { hash, fileBuffer, mimeType };
+}
+/**
  * Creates axios config with HTTPS agent for self-signed certificates in local development
  */
 function getAxiosConfig(baseUrl) {
@@ -104,10 +130,44 @@ class ProofOfAuthenticity {
             credentials: [
                 {
                     name: 'proofOfAuthenticityApi',
-                    required: true,
+                    required: false,
+                    displayOptions: {
+                        show: {
+                            credentialType: ['proofOfAuthenticityApi'],
+                        },
+                    },
+                },
+                {
+                    name: 'digiCryptoStoreApi',
+                    required: false,
+                    displayOptions: {
+                        show: {
+                            credentialType: ['digiCryptoStoreApi'],
+                        },
+                    },
                 },
             ],
             properties: [
+                // Credential Type Selection
+                {
+                    displayName: 'Credential Type',
+                    name: 'credentialType',
+                    type: 'options',
+                    options: [
+                        {
+                            name: 'ProofOfAuthenticity API (Light)',
+                            value: 'proofOfAuthenticityApi',
+                            description: 'Use dedicated ProofOfAuthenticity credentials',
+                        },
+                        {
+                            name: 'DigiCryptoStore API (Shared)',
+                            value: 'digiCryptoStoreApi',
+                            description: 'Use existing DigiCryptoStore credentials (same API)',
+                        },
+                    ],
+                    default: 'proofOfAuthenticityApi',
+                    description: 'Choose which credential to use. Both use the same CHECKHC API.',
+                },
                 // Operation
                 {
                     displayName: 'Operation',
@@ -315,7 +375,8 @@ class ProofOfAuthenticity {
         for (let i = 0; i < items.length; i++) {
             try {
                 const operation = this.getNodeParameter('operation', i);
-                const credentials = await this.getCredentials('proofOfAuthenticityApi', i);
+                const credentialType = this.getNodeParameter('credentialType', i, 'proofOfAuthenticityApi');
+                const credentials = await this.getCredentials(credentialType, i);
                 const baseUrl = credentials.digiCryptoStoreUrl.replace(/\/$/, '');
                 const apiKey = credentials.apiKey;
                 let responseData;
@@ -348,27 +409,52 @@ class ProofOfAuthenticity {
                     else {
                         fileData = this.getNodeParameter('fileData', i);
                     }
-                    const requestBody = {
-                        file_data: fileData,
-                        title,
-                        description,
-                        usage_type: usageType,
-                        payment_mode: 'credits', // Use subscription credits
-                    };
-                    // Add AI options if AI mode is enabled
-                    if (usageType === 'ai') {
-                        requestBody.ai_endpoint = 'art';
-                        requestBody.enable_c2pa = true; // C2PA auto-enabled with AI
+                    // MODE SIMPLE: Hash only (no file upload)
+                    if (usageType === 'simple') {
+                        // Calculate SHA-256 hash client-side
+                        const { hash, fileBuffer, mimeType } = calculateSHA256(fileData);
+                        // Extract filename from title or use default
+                        const originalFilename = title || 'file';
+                        const hashRequestBody = {
+                            memo_hash: hash,
+                            hash_algorithm: 'SHA-256',
+                            original_filename: originalFilename,
+                            file_size: fileBuffer.length,
+                            file_type: mimeType,
+                            timestamp: new Date().toISOString(),
+                            payment_mode: 'credits',
+                        };
+                        const response = await axios_1.default.post(`${baseUrl}/api/storage/solmemo/create-hash`, hashRequestBody, {
+                            timeout: REQUEST_TIMEOUT,
+                            headers: {
+                                'Authorization': `Bearer ${apiKey}`,
+                                'Content-Type': 'application/json',
+                            },
+                            ...getAxiosConfig(baseUrl),
+                        });
+                        responseData = response.data;
                     }
-                    const response = await axios_1.default.post(`${baseUrl}/api/solmemo/create`, requestBody, {
-                        timeout: usageType === 'ai' ? 60000 : REQUEST_TIMEOUT, // 60s if AI
-                        headers: {
-                            'Authorization': `Bearer ${apiKey}`,
-                            'Content-Type': 'application/json',
-                        },
-                        ...getAxiosConfig(baseUrl),
-                    });
-                    responseData = response.data;
+                    // MODE AI: Full file upload with AI analysis + C2PA
+                    else {
+                        const requestBody = {
+                            file_data: fileData,
+                            title,
+                            description,
+                            usage_type: 'ai',
+                            payment_mode: 'credits',
+                            ai_endpoint: 'art',
+                            enable_c2pa: true,
+                        };
+                        const response = await axios_1.default.post(`${baseUrl}/api/solmemo/create`, requestBody, {
+                            timeout: 60000, // 60s for AI processing
+                            headers: {
+                                'Authorization': `Bearer ${apiKey}`,
+                                'Content-Type': 'application/json',
+                            },
+                            ...getAxiosConfig(baseUrl),
+                        });
+                        responseData = response.data;
+                    }
                 }
                 // ============================================
                 // LIST CERTIFICATES OPERATION

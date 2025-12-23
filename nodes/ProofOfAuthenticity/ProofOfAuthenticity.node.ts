@@ -8,6 +8,7 @@ import {
 
 import axios from 'axios';
 import * as https from 'https';
+import * as crypto from 'crypto';
 
 // Security and Performance Constants
 const REQUEST_TIMEOUT = 30000;          // 30 seconds for API requests
@@ -46,6 +47,33 @@ function validateUrl(url: string): void {
 	if (hostname === 'localhost' || hostname.endsWith('.local')) {
 		throw new Error(`URL points to local hostname: ${hostname}`);
 	}
+}
+
+/**
+ * Calculates SHA-256 hash from file data (base64 or data URI)
+ */
+function calculateSHA256(fileData: string): { hash: string; fileBuffer: Buffer; mimeType: string } {
+	let base64Data: string;
+	let mimeType = 'application/octet-stream';
+	
+	// Handle data URI format: data:image/jpeg;base64,xxx
+	if (fileData.startsWith('data:')) {
+		const matches = fileData.match(/^data:([^;]+);base64,(.+)$/);
+		if (matches) {
+			mimeType = matches[1];
+			base64Data = matches[2];
+		} else {
+			const parts = fileData.split(',');
+			base64Data = parts[1] || parts[0];
+		}
+	} else {
+		base64Data = fileData;
+	}
+	
+	const fileBuffer = Buffer.from(base64Data, 'base64');
+	const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+	
+	return { hash, fileBuffer, mimeType };
 }
 
 /**
@@ -369,34 +397,66 @@ export class ProofOfAuthenticity implements INodeType {
 						fileData = this.getNodeParameter('fileData', i) as string;
 					}
 
-					const requestBody: any = {
-						file_data: fileData,
-						title,
-						description,
-						usage_type: usageType,
-						payment_mode: 'credits', // Use subscription credits
-					};
-
-					// Add AI options if AI mode is enabled
-					if (usageType === 'ai') {
-						requestBody.ai_endpoint = 'art';
-						requestBody.enable_c2pa = true; // C2PA auto-enabled with AI
-					}
-
-					const response = await axios.post(
-						`${baseUrl}/api/solmemo/create`,
-						requestBody,
-						{
-							timeout: usageType === 'ai' ? 60000 : REQUEST_TIMEOUT, // 60s if AI
-							headers: {
-								'Authorization': `Bearer ${apiKey}`,
-								'Content-Type': 'application/json',
+					// MODE SIMPLE: Hash only (no file upload)
+					if (usageType === 'simple') {
+						// Calculate SHA-256 hash client-side
+						const { hash, fileBuffer, mimeType } = calculateSHA256(fileData);
+						
+						// Extract filename from title or use default
+						const originalFilename = title || 'file';
+						
+						const hashRequestBody = {
+							memo_hash: hash,
+							hash_algorithm: 'SHA-256',
+							original_filename: originalFilename,
+							file_size: fileBuffer.length,
+							file_type: mimeType,
+							timestamp: new Date().toISOString(),
+							payment_mode: 'credits',
+						};
+						
+						const response = await axios.post(
+							`${baseUrl}/api/storage/solmemo/create-hash`,
+							hashRequestBody,
+							{
+								timeout: REQUEST_TIMEOUT,
+								headers: {
+									'Authorization': `Bearer ${apiKey}`,
+									'Content-Type': 'application/json',
+								},
+								...getAxiosConfig(baseUrl),
 							},
-							...getAxiosConfig(baseUrl),
-						},
-					);
+						);
+						
+						responseData = response.data;
+					}
+					// MODE AI: Full file upload with AI analysis + C2PA
+					else {
+						const requestBody: any = {
+							file_data: fileData,
+							title,
+							description,
+							usage_type: 'ai',
+							payment_mode: 'credits',
+							ai_endpoint: 'art',
+							enable_c2pa: true,
+						};
 
-					responseData = response.data;
+						const response = await axios.post(
+							`${baseUrl}/api/solmemo/create`,
+							requestBody,
+							{
+								timeout: 60000, // 60s for AI processing
+								headers: {
+									'Authorization': `Bearer ${apiKey}`,
+									'Content-Type': 'application/json',
+								},
+								...getAxiosConfig(baseUrl),
+							},
+						);
+
+						responseData = response.data;
+					}
 				}
 
 				// ============================================
