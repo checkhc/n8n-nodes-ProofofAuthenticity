@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-proofofauthenticity",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "ProofOfAuthenticity by CHECKHC - Blockchain timestamping with AI detection and C2PA content authenticity.",
   "keywords": [
     "n8n",

@@ -231,6 +231,11 @@ class ProofOfAuthenticity {
                     },
                     options: [
                         {
+                            name: 'Binary (from previous node)',
+                            value: 'binary',
+                            description: 'Use binary data from previous node (e.g., Form Trigger)',
+                        },
+                        {
                             name: 'URL',
                             value: 'url',
                             description: 'Download file from URL',
@@ -241,8 +246,22 @@ class ProofOfAuthenticity {
                             description: 'File content as base64 encoded string',
                         },
                     ],
-                    default: 'url',
+                    default: 'binary',
                     description: 'How to provide the file content',
+                },
+                {
+                    displayName: 'Binary Property',
+                    name: 'binaryPropertyName',
+                    type: 'string',
+                    displayOptions: {
+                        show: {
+                            operation: ['createCertificate'],
+                            inputType: ['binary'],
+                        },
+                    },
+                    default: 'data',
+                    placeholder: 'data',
+                    description: 'Name of the binary property containing the file (default: "data" for Form Trigger)',
                 },
                 {
                     displayName: 'File URL',
@@ -392,7 +411,16 @@ class ProofOfAuthenticity {
                     // Map certification mode to API parameters
                     const usageType = certificationMode === 'simple' ? 'simple' : 'ai';
                     let fileData;
-                    if (inputType === 'url') {
+                    if (inputType === 'binary') {
+                        // Read binary data from previous node (e.g., Form Trigger)
+                        const binaryPropertyName = this.getNodeParameter('binaryPropertyName', i, 'data');
+                        const binaryData = this.helpers.assertBinaryData(i, binaryPropertyName);
+                        const buffer = await this.helpers.getBinaryDataBuffer(i, binaryPropertyName);
+                        const mimeType = binaryData.mimeType || 'application/octet-stream';
+                        const base64Data = buffer.toString('base64');
+                        fileData = `data:${mimeType};base64,${base64Data}`;
+                    }
+                    else if (inputType === 'url') {
                         const fileUrl = this.getNodeParameter('fileUrl', i);
                         // Validate URL to prevent SSRF
                         validateUrl(fileUrl);
