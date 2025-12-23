@@ -79,10 +79,44 @@ export class ProofOfAuthenticity implements INodeType {
 		credentials: [
 			{
 				name: 'proofOfAuthenticityApi',
-				required: true,
+				required: false,
+				displayOptions: {
+					show: {
+						credentialType: ['proofOfAuthenticityApi'],
+					},
+				},
+			},
+			{
+				name: 'digiCryptoStoreApi',
+				required: false,
+				displayOptions: {
+					show: {
+						credentialType: ['digiCryptoStoreApi'],
+					},
+				},
 			},
 		],
 		properties: [
+			// Credential Type Selection
+			{
+				displayName: 'Credential Type',
+				name: 'credentialType',
+				type: 'options',
+				options: [
+					{
+						name: 'ProofOfAuthenticity API (Light)',
+						value: 'proofOfAuthenticityApi',
+						description: 'Use dedicated ProofOfAuthenticity credentials',
+					},
+					{
+						name: 'DigiCryptoStore API (Shared)',
+						value: 'digiCryptoStoreApi',
+						description: 'Use existing DigiCryptoStore credentials (same API)',
+					},
+				],
+				default: 'proofOfAuthenticityApi',
+				description: 'Choose which credential to use. Both use the same CHECKHC API.',
+			},
 			// Operation
 			{
 				displayName: 'Operation',
@@ -293,7 +327,8 @@ export class ProofOfAuthenticity implements INodeType {
 		for (let i = 0; i < items.length; i++) {
 			try {
 				const operation = this.getNodeParameter('operation', i) as string;
-				const credentials = await this.getCredentials('proofOfAuthenticityApi', i);
+				const credentialType = this.getNodeParameter('credentialType', i, 'proofOfAuthenticityApi') as string;
+				const credentials = await this.getCredentials(credentialType, i);
 				const baseUrl = (credentials.digiCryptoStoreUrl as string).replace(/\/$/, '');
 				const apiKey = credentials.apiKey as string;
 
