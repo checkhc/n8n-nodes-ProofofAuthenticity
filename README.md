@@ -14,7 +14,6 @@
 - **Blockchain Timestamping** - SHA-256 hash certified on Solana blockchain
 - **AI Authenticity Detection** - Detect AI-generated vs human-created content
 - **C2PA Integration** - Content Authenticity Initiative standard metadata
-- **Credit-Based Pricing** - Pay only for what you use
 
 ## Operations
 
@@ -29,7 +28,7 @@ Certify content with blockchain timestamp.
 | Title | Certificate title (required) |
 | Author | Author name (optional) |
 | Description | Description (optional) |
-| Certification Mode | Simple (1 credit) or AI + C2PA (30 credits) |
+| Certification Mode | Simple or AI + C2PA |
 
 ### List Certificates
 
@@ -56,13 +55,6 @@ yarn add n8n-nodes-proofofauthenticity
 1. Create a credential of type **ProofOfAuthenticity API**
 2. Enter your DigiCryptoStore instance URL
 3. Enter your API Key (Settings > API Keys)
-
-## Pricing
-
-| Mode | Features | Cost |
-|------|----------|------|
-| Simple | Blockchain hash only | 1 credit |
-| AI + C2PA | Hash + AI detection + C2PA metadata | 30 credits |
 
 ## Support
 
