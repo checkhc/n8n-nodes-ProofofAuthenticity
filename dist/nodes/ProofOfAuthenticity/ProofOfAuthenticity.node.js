@@ -182,6 +182,18 @@ class ProofOfAuthenticity {
                             action: 'Create certificate',
                         },
                         {
+                            name: 'Download C2PA File',
+                            value: 'downloadC2paFile',
+                            description: 'Download the C2PA signed image file as binary',
+                            action: 'Download C2PA file',
+                        },
+                        {
+                            name: 'Download PDF Certificate',
+                            value: 'downloadPdfCertificate',
+                            description: 'Download the PDF certificate as binary',
+                            action: 'Download PDF certificate',
+                        },
+                        {
                             name: 'List Certificates',
                             value: 'listCertificates',
                             description: 'List all your blockchain certificates',
@@ -384,6 +396,64 @@ class ProofOfAuthenticity {
                     default: 100,
                     description: 'Maximum number of results to return',
                 },
+                // ============================================
+                // DOWNLOAD C2PA FILE PARAMETERS
+                // ============================================
+                {
+                    displayName: 'C2PA Download URL',
+                    name: 'c2paDownloadUrl',
+                    type: 'string',
+                    displayOptions: {
+                        show: {
+                            operation: ['downloadC2paFile'],
+                        },
+                    },
+                    default: '',
+                    required: true,
+                    placeholder: '/api/c2pa/download/abc123',
+                    description: 'The c2pa_download_url returned by Create Certificate (AI mode)',
+                },
+                {
+                    displayName: 'Binary Property Name',
+                    name: 'c2paBinaryProperty',
+                    type: 'string',
+                    displayOptions: {
+                        show: {
+                            operation: ['downloadC2paFile'],
+                        },
+                    },
+                    default: 'c2pa_file',
+                    description: 'Name of the binary property to store the downloaded C2PA file',
+                },
+                // ============================================
+                // DOWNLOAD PDF CERTIFICATE PARAMETERS
+                // ============================================
+                {
+                    displayName: 'C2PA File ID',
+                    name: 'c2paFileId',
+                    type: 'string',
+                    displayOptions: {
+                        show: {
+                            operation: ['downloadPdfCertificate'],
+                        },
+                    },
+                    default: '',
+                    required: true,
+                    placeholder: 'abc123-def456-ghi789',
+                    description: 'The c2pa_file_id returned by Create Certificate (AI mode)',
+                },
+                {
+                    displayName: 'Binary Property Name',
+                    name: 'pdfBinaryProperty',
+                    type: 'string',
+                    displayOptions: {
+                        show: {
+                            operation: ['downloadPdfCertificate'],
+                        },
+                    },
+                    default: 'pdf_certificate',
+                    description: 'Name of the binary property to store the downloaded PDF certificate',
+                },
             ],
         };
     }
@@ -512,6 +582,91 @@ class ProofOfAuthenticity {
                         ...getAxiosConfig(baseUrl),
                     });
                     responseData = response.data;
+                }
+                // ============================================
+                // DOWNLOAD C2PA FILE OPERATION
+                // ============================================
+                else if (operation === 'downloadC2paFile') {
+                    const c2paDownloadUrl = this.getNodeParameter('c2paDownloadUrl', i);
+                    const binaryPropertyName = this.getNodeParameter('c2paBinaryProperty', i, 'c2pa_file');
+                    const fullUrl = c2paDownloadUrl.startsWith('http')
+                        ? c2paDownloadUrl
+                        : `${baseUrl}${c2paDownloadUrl.startsWith('/') ? '' : '/'}${c2paDownloadUrl}`;
+                    const response = await axios_1.default.get(fullUrl, {
+                        timeout: DOWNLOAD_TIMEOUT,
+                        responseType: 'arraybuffer',
+                        maxContentLength: MAX_FILE_SIZE,
+                        maxBodyLength: MAX_FILE_SIZE,
+                        headers: {
+                            'Authorization': `Bearer ${apiKey}`,
+                        },
+                        ...getAxiosConfig(baseUrl),
+                    });
+                    const contentType = response.headers['content-type'] || 'image/jpeg';
+                    const contentDisposition = response.headers['content-disposition'] || '';
+                    let fileName = 'c2pa_file';
+                    const filenameMatch = contentDisposition.match(/filename[^;=\n]*=(['"]?)([^'"\n;]*)['"]?/);
+                    if (filenameMatch && filenameMatch[2]) {
+                        fileName = filenameMatch[2];
+                    }
+                    else {
+                        const ext = contentType.split('/')[1] || 'jpg';
+                        fileName = `c2pa_file.${ext}`;
+                    }
+                    const binaryData = await this.helpers.prepareBinaryData(Buffer.from(response.data), fileName, contentType);
+                    returnData.push({
+                        json: {
+                            success: true,
+                            fileName,
+                            mimeType: contentType,
+                            fileSize: response.data.byteLength,
+                        },
+                        binary: {
+                            [binaryPropertyName]: binaryData,
+                        },
+                        pairedItem: { item: i },
+                    });
+                    continue;
+                }
+                // ============================================
+                // DOWNLOAD PDF CERTIFICATE OPERATION
+                // ============================================
+                else if (operation === 'downloadPdfCertificate') {
+                    const c2paFileId = this.getNodeParameter('c2paFileId', i);
+                    const binaryPropertyName = this.getNodeParameter('pdfBinaryProperty', i, 'pdf_certificate');
+                    const pdfUrl = `${baseUrl}/api/c2pa/certificate/${c2paFileId}/pdf`;
+                    const response = await axios_1.default.get(pdfUrl, {
+                        timeout: DOWNLOAD_TIMEOUT,
+                        responseType: 'arraybuffer',
+                        maxContentLength: MAX_FILE_SIZE,
+                        maxBodyLength: MAX_FILE_SIZE,
+                        headers: {
+                            'Authorization': `Bearer ${apiKey}`,
+                        },
+                        ...getAxiosConfig(baseUrl),
+                    });
+                    const contentType = response.headers['content-type'] || 'application/pdf';
+                    const contentDisposition = response.headers['content-disposition'] || '';
+                    let fileName = `certificate_${c2paFileId}.pdf`;
+                    const filenameMatch = contentDisposition.match(/filename[^;=\n]*=(['"]?)([^'"\n;]*)['"]?/);
+                    if (filenameMatch && filenameMatch[2]) {
+                        fileName = filenameMatch[2];
+                    }
+                    const binaryData = await this.helpers.prepareBinaryData(Buffer.from(response.data), fileName, contentType);
+                    returnData.push({
+                        json: {
+                            success: true,
+                            fileName,
+                            mimeType: contentType,
+                            fileSize: response.data.byteLength,
+                            c2paFileId,
+                        },
+                        binary: {
+                            [binaryPropertyName]: binaryData,
+                        },
+                        pairedItem: { item: i },
+                    });
+                    continue;
                 }
                 // Return data
                 returnData.push({
