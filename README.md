@@ -47,7 +47,7 @@ Download the PDF certificate as binary output.
 
 | Parameter | Description |
 |-----------|-------------|
-| C2PA File ID | The `c2pa_file_id` returned by Create Certificate (AI mode) |
+| IV Storage ID | The `iv_storageid` returned by Create Certificate |
 | Binary Property Name | Output binary property name (default: `pdf_certificate`) |
 
 **Output**: PDF document with certification details.

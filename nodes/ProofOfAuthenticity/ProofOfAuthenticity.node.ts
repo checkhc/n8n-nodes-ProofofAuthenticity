@@ -411,8 +411,8 @@ export class ProofOfAuthenticity implements INodeType {
 			// DOWNLOAD PDF CERTIFICATE PARAMETERS
 			// ============================================
 			{
-				displayName: 'C2PA File ID',
-				name: 'c2paFileId',
+				displayName: 'IV Storage ID',
+				name: 'ivStorageId',
 				type: 'string',
 				displayOptions: {
 					show: {
@@ -422,7 +422,7 @@ export class ProofOfAuthenticity implements INodeType {
 				default: '',
 				required: true,
 				placeholder: 'abc123-def456-ghi789',
-				description: 'The c2pa_file_id returned by Create Certificate (AI mode)',
+				description: 'The iv_storageid returned by Create Certificate',
 			},
 			{
 				displayName: 'Binary Property Name',
@@ -655,10 +655,10 @@ export class ProofOfAuthenticity implements INodeType {
 				// DOWNLOAD PDF CERTIFICATE OPERATION
 				// ============================================
 				else if (operation === 'downloadPdfCertificate') {
-					const c2paFileId = this.getNodeParameter('c2paFileId', i) as string;
+					const ivStorageId = this.getNodeParameter('ivStorageId', i) as string;
 					const binaryPropertyName = this.getNodeParameter('pdfBinaryProperty', i, 'pdf_certificate') as string;
 					
-					const pdfUrl = `${baseUrl}/api/c2pa/certificate/${c2paFileId}/pdf`;
+					const pdfUrl = `${baseUrl}/api/solmemo/certificate/${ivStorageId}`;
 					
 					const response = await axios.get(
 						pdfUrl,
@@ -676,7 +676,7 @@ export class ProofOfAuthenticity implements INodeType {
 					
 					const contentType = response.headers['content-type'] || 'application/pdf';
 					const contentDisposition = response.headers['content-disposition'] || '';
-					let fileName = `certificate_${c2paFileId}.pdf`;
+					let fileName = `certificate_${ivStorageId}.pdf`;
 					
 					const filenameMatch = contentDisposition.match(/filename[^;=\n]*=(['"]?)([^'"\n;]*)['"]?/);
 					if (filenameMatch && filenameMatch[2]) {
@@ -695,7 +695,7 @@ export class ProofOfAuthenticity implements INodeType {
 							fileName,
 							mimeType: contentType,
 							fileSize: response.data.byteLength,
-							c2paFileId,
+							ivStorageId,
 						},
 						binary: {
 							[binaryPropertyName]: binaryData,
