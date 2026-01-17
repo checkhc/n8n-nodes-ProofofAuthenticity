@@ -30,6 +30,28 @@ Certify content with blockchain timestamp.
 | Description | Description (optional) |
 | Certification Mode | Simple or AI + C2PA |
 
+### Download C2PA File
+
+Download the C2PA signed image file as binary output. Use this after creating a certificate with AI + C2PA mode.
+
+| Parameter | Description |
+|-----------|-------------|
+| C2PA Download URL | The `c2pa_download_url` returned by Create Certificate (AI mode) |
+| Binary Property Name | Output binary property name (default: `c2pa_file`) |
+
+**Output**: Binary file with C2PA metadata embedded.
+
+### Download PDF Certificate
+
+Download the PDF certificate as binary output.
+
+| Parameter | Description |
+|-----------|-------------|
+| C2PA File ID | The `c2pa_file_id` returned by Create Certificate (AI mode) |
+| Binary Property Name | Output binary property name (default: `pdf_certificate`) |
+
+**Output**: PDF document with certification details.
+
 ### List Certificates
 
 List blockchain certificates with optional filters (hash, filename, signature).
